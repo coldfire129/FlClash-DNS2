@@ -4,7 +4,7 @@
 
 [Windows 原生构建与客户端下载](https://github.com/coldfire129/FlClash-DNS2/actions/workflows/windows-native.yaml)。从成功运行的 Artifacts 下载完整客户端，包含 `FlClash.exe`、Core、Helper、DLL、data 与构建记录；不能只复制主 EXE。
 
-构建任务自动拉取固定的公开 FlClash/Mihomo 上游版本，将 `source-overrides/` 中已经整合的完整文件写入工程，并使用 `build/source-manifest.json` 校验全部 2,492 个源文件。不需要应用补丁，也不会上传历史诊断包或构建日志作为构建输入。
+构建任务自动拉取固定的公开 FlClash/Mihomo 上游版本，将 `source-overrides/` 中已经整合的完整文件写入工程，并使用 `build/source-manifest.json` 校验全部源文件。不需要应用补丁，也不会上传历史诊断包或构建日志作为构建输入。
 
 - FlClash 固定版本：`7fd417fb9a9a277c6a9339a8ac87f907df7c25f7`。
 - Mihomo 固定版本：`c5062921054902b25215a6a933e72ccd714c9bfa`。
