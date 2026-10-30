@@ -263,9 +263,13 @@ void main() {
   });
 
   group('run failures', () {
-    for (final protected in [false, true]) {
+    for (final (protected, initialize) in [
+      (false, true),
+      (true, true),
+      (true, false),
+    ]) {
       test(
-        'initialization failure preserves Guard when protection is $protected',
+        'failed start preserves Guard: protected=$protected initialize=$initialize',
         () async {
           final core = _MockCoreHandlerInterface();
           final scopedAction = TestSetupAction()..applyProfileResult = false;
@@ -279,6 +283,7 @@ void main() {
           );
           addTearDown(scoped.dispose);
           globalState.container = scoped;
+          scoped.read(initProvider.notifier).value = true;
           scoped.read(appSettingProvider.notifier).update(
             (state) => state.copyWith(
               dnsProtection: DnsProtectionProps(
@@ -289,10 +294,10 @@ void main() {
           );
           final setup = scoped.read(setupActionProvider.notifier);
           expect(
-            await setup.setRunning(true, initialize: true),
+            await setup.setRunning(true, initialize: initialize),
             isFalse,
           );
-          expect(scoped.read(isStartProvider), isFalse);
+          expect(scoped.read(isStartProvider), system.isWindows && protected);
           final stops = system.isWindows && protected ? <bool>[] : [false];
           expect(scopedAction.coreRunningCalls, stops);
           if (system.isWindows && !protected) {
@@ -308,6 +313,7 @@ void main() {
             verify(() => core.releaseDnsProtection()).called(1);
           }
         },
+        skip: !initialize && !system.isWindows,
       );
     }
 

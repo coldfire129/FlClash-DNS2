@@ -204,17 +204,10 @@ class SetupAction extends _$SetupAction {
 
   Future<bool> _start(_RunRequest request) async {
     if (_protectedDns && !request.initialize) {
-      try {
-        final applied = await applyProfile(
-          force: true,
-          preloadInvoke: () => _startCoreRunning(request),
-        );
-        if (!applied) _rollbackRunning(request);
-        return applied;
-      } catch (_) {
-        _rollbackRunning(request);
-        rethrow;
-      }
+      return applyProfile(
+        force: true,
+        preloadInvoke: () => _startCoreRunning(request),
+      );
     }
     if (request.initialize) {
       var applied = false;
@@ -226,12 +219,8 @@ class SetupAction extends _$SetupAction {
       } catch (_) {
         applied = false;
       }
-      if (!applied && _isCurrent(request)) {
-        if (_protectedDns) {
-          _rollbackRunning(request);
-        } else {
-          await globalState.safeRun(() => setRunning(false));
-        }
+      if (!applied && _isCurrent(request) && !_protectedDns) {
+        await globalState.safeRun(() => setRunning(false));
       }
       return applied;
     }
