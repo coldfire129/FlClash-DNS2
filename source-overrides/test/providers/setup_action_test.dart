@@ -85,6 +85,7 @@ class TestSetupAction extends SetupAction {
   final List<Completer<void>> pendingCoreCalls = [];
   int trafficResets = 0;
   int applyProfileCalls = 0;
+  bool applyProfileResult = true;
   final List<bool> appliedForce = [];
   bool blockCoreCalls = false;
   Error? coreRunningError;
@@ -131,6 +132,7 @@ class TestSetupAction extends SetupAction {
   }) async {
     applyProfileCalls++;
     appliedForce.add(force);
+    if (!applyProfileResult) return false;
     await preloadInvoke?.call();
     return true;
   }
@@ -261,6 +263,54 @@ void main() {
   });
 
   group('run failures', () {
+    for (final protected in [false, true]) {
+      test(
+        'initialization failure preserves Guard when protection is $protected',
+        () async {
+          final core = _MockCoreHandlerInterface();
+          final scopedAction = TestSetupAction()..applyProfileResult = false;
+          final scoped = ProviderContainer(
+            overrides: [
+              coreHandlerProvider.overrideWithValue(CoreController.scoped(core)),
+              profilesProvider.overrideWith(TestProfiles.new),
+              setupActionProvider.overrideWith(() => scopedAction),
+              commonActionProvider.overrideWith(TestCommonAction.new),
+            ],
+          );
+          addTearDown(scoped.dispose);
+          globalState.container = scoped;
+          scoped.read(appSettingProvider.notifier).update(
+            (state) => state.copyWith(
+              dnsProtection: DnsProtectionProps(
+                enabled: protected,
+                proxyTarget: 'HK-01',
+              ),
+            ),
+          );
+          final setup = scoped.read(setupActionProvider.notifier);
+          expect(
+            await setup.setRunning(true, initialize: true),
+            isFalse,
+          );
+          expect(scoped.read(isStartProvider), isFalse);
+          final stops = system.isWindows && protected ? <bool>[] : [false];
+          expect(scopedAction.coreRunningCalls, stops);
+          if (system.isWindows && !protected) {
+            verify(() => core.releaseDnsProtection()).called(1);
+          } else {
+            verifyNever(() => core.releaseDnsProtection());
+          }
+
+          await setup.setRunning(false);
+
+          expect(scopedAction.coreRunningCalls, [...stops, false]);
+          if (system.isWindows) {
+            verify(() => core.releaseDnsProtection()).called(1);
+          }
+        },
+      );
+    }
+
     test('a start the core rejects stops reporting a run time', () async {
       markInitialized();
       action.coreRunningError = StateError('start failed');

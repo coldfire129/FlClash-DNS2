@@ -227,7 +227,11 @@ class SetupAction extends _$SetupAction {
         applied = false;
       }
       if (!applied && _isCurrent(request)) {
-        await globalState.safeRun(() => setRunning(false));
+        if (_protectedDns) {
+          _rollbackRunning(request);
+        } else {
+          await globalState.safeRun(() => setRunning(false));
+        }
       }
       return applied;
     }
