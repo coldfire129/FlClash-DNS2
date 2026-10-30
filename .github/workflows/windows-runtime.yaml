@@ -1,0 +1,56 @@
+name: Check FlClash DNS2 Windows runtime
+
+on:
+  workflow_run:
+    workflows: ['Build FlClash DNS2 Windows client']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful native Windows build run ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: dns2-windows-runtime
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Record test source revision
+        shell: pwsh
+        run: |
+          $revision = (& git rev-parse HEAD).Trim()
+          Add-Content $env:GITHUB_ENV ('DNS2_RUNTIME_SCRIPT_SHA=' + $revision)
+      - uses: actions/download-artifact@v4
+        with:
+          name: FlClash-0.9.2-dns2-windows-amd64-native
+          path: native-artifact
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id || inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check native startup, SCM, WFP and journal ACL
+        shell: pwsh
+        env:
+          DNS2_NATIVE_BUILD_RUN: ${{ github.event.workflow_run.id || inputs.build_run_id }}
+        run: ./build/test-windows-runtime.ps1 -ArtifactDirectory native-artifact -OutputDirectory runtime-records
+      - name: Upload runtime records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlClash-0.9.2-dns2-windows-runtime-records
+          path: runtime-records/
+          retention-days: 30
+          if-no-files-found: warn
