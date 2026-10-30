@@ -1,0 +1,32 @@
+name: Restore verified DNS2 source
+description: Restore pinned public upstream source and verified complete DNS2 files
+runs:
+  using: composite
+  steps:
+    - shell: pwsh
+      run: |
+        git config --global core.autocrlf false
+        git config --global url.https://github.com/.insteadOf git@github.com:
+    - uses: actions/checkout@v4
+      with:
+        repository: chen08209/FlClash
+        ref: 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7
+        submodules: recursive
+        path: source/FlClash-DNS
+        persist-credentials: false
+    - shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $source = Join-Path $env:GITHUB_WORKSPACE 'source/FlClash-DNS'
+        Get-ChildItem source-overrides -Force | ForEach-Object {
+          Copy-Item -LiteralPath $_.FullName -Destination $source -Recurse -Force
+        }
+        $manifest = Get-Content build/source-manifest.json -Raw | ConvertFrom-Json
+        $mihomo = (& git -C (Join-Path $source 'core/Clash.Meta') rev-parse HEAD).Trim()
+        if ($mihomo -ne $manifest.mihomo_commit) { throw 'Unexpected Mihomo source revision.' }
+        foreach ($file in $manifest.source_files) {
+          $path = Join-Path $source $file.path
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw ('Missing source: ' + $file.path) }
+          if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) { throw ('Integrated source SHA256 mismatch: ' + $file.path) }
+        }
+        Write-Host ('Verified integrated source files: ' + $manifest.source_files.Count)

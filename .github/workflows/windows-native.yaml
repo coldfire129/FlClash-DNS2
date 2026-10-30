@@ -18,42 +18,115 @@ env:
   FLUTTER_SUPPRESS_ANALYTICS: 'true'
 
 jobs:
-  build:
+  go-tests:
     runs-on: windows-2022
-    timeout-minutes: 90
+    timeout-minutes: 10
     steps:
-      - name: Preserve source line endings
-        shell: pwsh
-        run: |
-          git config --global core.autocrlf false
-          git config --global url.https://github.com/.insteadOf git@github.com:
       - uses: actions/checkout@v4
-      - name: Checkout fixed public upstream source
-        uses: actions/checkout@v4
+      - uses: ./build/restore-source
+      - uses: actions/setup-go@v5
         with:
-          repository: chen08209/FlClash
-          ref: 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7
-          submodules: recursive
-          path: source/FlClash-DNS
-      - name: Integrate and verify DNS2 complete source files
+          go-version: '1.27.1'
+          cache-dependency-path: source/FlClash-DNS/core/go.sum
+      - name: Native Go tests
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          & './build/invoke-ci-command.ps1' -Name go-test -Command go -WorkingDirectory source/FlClash-DNS/core -Arguments @('test', '-timeout', '120s', '.')
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dns2-native-go-test-records
+          path: check-logs/
+  helper-tests:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./build/restore-source
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+      - name: Native Helper tests
+        timeout-minutes: 8
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $source = Join-Path $env:GITHUB_WORKSPACE 'source/FlClash-DNS'
-          Get-ChildItem source-overrides -Force | ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination $source -Recurse -Force
-          }
-          $manifest = Get-Content build/source-manifest.json -Raw | ConvertFrom-Json
-          $mihomo = (& git -C (Join-Path $source 'core/Clash.Meta') rev-parse HEAD).Trim()
-          if ($mihomo -ne $manifest.mihomo_commit) { throw 'Unexpected Mihomo source revision.' }
-          foreach ($file in $manifest.source_files) {
-            $path = Join-Path $source $file.path
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw ('Missing source: ' + $file.path) }
-            if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) {
-              throw ('Integrated source SHA256 mismatch: ' + $file.path)
-            }
-          }
-          Write-Host ('Verified integrated source files: ' + $manifest.source_files.Count)
+          & './build/invoke-ci-command.ps1' -Name helper-test -Command cargo -WorkingDirectory source/FlClash-DNS -Arguments @('test', '--locked', '--manifest-path', 'services/helper/Cargo.toml', '--features', 'windows-service', '--', '--test-threads=1')
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dns2-native-helper-test-records
+          path: check-logs/
+  flutter-tests:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./build/restore-source
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+          cache: true
+      - name: Isolate Dart checks from the Go Helper build hook
+        shell: pwsh
+        run: |
+          $path = 'source/FlClash-DNS/pubspec.yaml'
+          $text = [IO.File]::ReadAllText($path)
+          $text = $text.Replace("setup:`n      build_assets: true", "setup:`n      build_assets: false")
+          if (-not $text.Contains("setup:`n      build_assets: false") -or -not $text.Contains("rust_api:`n      build_assets: true")) { throw 'Unexpected test hook settings.' }
+          [IO.File]::WriteAllText($path, $text)
+      - name: Initialize Flutter
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name flutter-bootstrap -Command flutter -WorkingDirectory source/FlClash-DNS -Arguments @('--version')
+      - name: Resolve dependencies
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name pub-get -Command flutter -WorkingDirectory source/FlClash-DNS -Arguments @('pub', 'get')
+      - name: Generate code
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name generation -Command dart -WorkingDirectory source/FlClash-DNS -Arguments @('run', 'build_runner', 'build', '--delete-conflicting-outputs')
+      - name: Generate localization
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name localization -Command dart -WorkingDirectory source/FlClash-DNS -Arguments @('run', 'intl_utils:generate')
+      - name: Analyze
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name analyze -Command flutter -WorkingDirectory source/FlClash-DNS -Arguments @('analyze', '--no-fatal-infos')
+      - name: Native Flutter tests
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name flutter-test -Command flutter -WorkingDirectory source/FlClash-DNS -Arguments @(
+            'test', '--reporter', 'expanded',
+            'test/common/dns_protection_test.dart', 'test/common/dns_protection_log_test.dart',
+            'test/common/dns_protection_probe_test.dart', 'test/common/http_test.dart',
+            'test/core/controller_test.dart', 'test/core/service_test.dart', 'test/core/protocol_contract_test.dart',
+            'test/core/desktop/helper_client_test.dart', 'test/providers/setup_action_test.dart',
+            'test/manager/core_manager_test.dart', 'test/views/dns_protection_test.dart',
+            'test/l10n', 'test/lint/dynamic_message_key_test.dart'
+          )
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dns2-native-flutter-test-records
+          path: check-logs/
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./build/restore-source
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27.1'
@@ -66,44 +139,29 @@ jobs:
           flutter-version: '3.47.6'
           channel: stable
           cache: true
-      - name: Native build and tests
+      - name: Initialize Flutter
         shell: pwsh
-        run: ./source/FlClash-DNS/tool/build_dns_windows.ps1 -OutputDirectory "$env:GITHUB_WORKSPACE/delivery"
+        run: |
+          & './build/invoke-ci-command.ps1' -Name flutter-bootstrap -Command flutter -WorkingDirectory source/FlClash-DNS -LogDirectory delivery/build-logs -Arguments @('--version')
+      - name: Resolve dependencies
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name pub-get -Command flutter -WorkingDirectory source/FlClash-DNS -LogDirectory delivery/build-logs -Arguments @('pub', 'get')
+      - name: Verify native asset build hooks
+        shell: pwsh
+        run: |
+          $text = Get-Content source/FlClash-DNS/pubspec.yaml -Raw
+          if ($text -notmatch '(?ms)setup:\s+build_assets: true' -or $text -notmatch '(?ms)rust_api:\s+build_assets: true') { throw 'Native package must build every asset from source.' }
+      - name: Build full native Windows package
+        timeout-minutes: 35
+        shell: pwsh
+        run: |
+          & './build/invoke-ci-command.ps1' -Name native-package -Command dart -WorkingDirectory source/FlClash-DNS -LogDirectory delivery/build-logs -Arguments @('run', 'setup.dart', 'windows', '--targets', 'zip', '--env', 'pre')
       - name: Verify complete runnable client
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $packages = @(Get-ChildItem delivery -File -Filter '*windows*amd64*.zip')
-          if ($packages.Count -ne 1) { throw 'Expected one native Windows client ZIP.' }
-          $unpacked = Join-Path $env:RUNNER_TEMP 'dns2-client-verification'
-          Expand-Archive -LiteralPath $packages[0].FullName -DestinationPath $unpacked
-          $apps = @(Get-ChildItem $unpacked -Recurse -File -Filter FlClash.exe)
-          if ($apps.Count -ne 1) { throw 'The client ZIP must contain exactly one FlClash.exe.' }
-          $bundle = $apps[0].Directory.FullName
-          foreach ($name in @('FlClash.exe', 'FlClashCore.exe', 'FlClashHelperService.exe', 'flutter_windows.dll', 'manifest.json', 'data/icudtl.dat', 'data/app.so', 'data/flutter_assets')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $bundle $name))) { throw ('Incomplete native client: ' + $name) }
-          }
-          foreach ($name in @('FlClash.exe', 'FlClashCore.exe', 'FlClashHelperService.exe', 'flutter_windows.dll')) {
-            $bytes = [IO.File]::ReadAllBytes((Join-Path $bundle $name))
-            if ($bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw ('Missing Windows PE header: ' + $name) }
-          }
-          $coreManifest = Get-Content (Join-Path $bundle 'manifest.json') -Raw | ConvertFrom-Json
-          $coreHash = (Get-FileHash (Join-Path $bundle 'FlClashCore.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($coreHash -ne $coreManifest.coreSha256) { throw 'Core binary and Helper manifest do not match.' }
-          Get-ChildItem $bundle -Recurse -File | Get-FileHash -Algorithm SHA256 | Select-Object Path, Hash | ConvertTo-Json -Depth 5 | Set-Content delivery/client-file-hashes.json
-          Copy-Item build/source-manifest.json delivery/source-input.json
-          [ordered]@{
-            package = $packages[0].Name
-            complete_client = $true
-            core_sha256 = $coreHash
-            native_windows_build = 'passed'
-            gui_startup = 'not_performed'
-            helper_scm_runtime = 'not_performed'
-            wfp_runtime = 'not_performed'
-            physical_dns_leak_acceptance = 'not_performed'
-          } | ConvertTo-Json | Set-Content delivery/package-verification.json
-      - name: Upload Windows client and build records
-        if: always()
+          & './build/collect-native-package.ps1'
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: FlClash-0.9.2-dns2-windows-amd64-native
