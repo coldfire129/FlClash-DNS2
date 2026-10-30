@@ -164,6 +164,9 @@ void main() {
     action = TestSetupAction();
     container = ProviderContainer(
       overrides: [
+        coreHandlerProvider.overrideWithValue(
+          CoreController.scoped(_MockCoreHandlerInterface()),
+        ),
         profilesProvider.overrideWith(TestProfiles.new),
         setupActionProvider.overrideWith(() => action),
         commonActionProvider.overrideWith(TestCommonAction.new),
@@ -214,6 +217,9 @@ void main() {
       final scopedAction = TestSetupAction();
       final scoped = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(TestProfiles.new),
           setupActionProvider.overrideWith(() => scopedAction),
           commonActionProvider.overrideWith(TestCommonAction.new),
@@ -360,6 +366,9 @@ void main() {
     SetupAction buildScoped() {
       scoped = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(TestProfiles.new),
           setupActionProvider.overrideWith(TestSetupAction.new),
           commonActionProvider.overrideWith(TestCommonAction.new),
@@ -452,6 +461,9 @@ void main() {
       action = TestSetupAction();
       container = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(TestProfiles.new),
           setupActionProvider.overrideWith(() => action),
           commonActionProvider.overrideWith(TestCommonAction.new),
@@ -473,6 +485,9 @@ void main() {
       action = TestSetupAction();
       container = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(TestProfiles.new),
           setupActionProvider.overrideWith(() => action),
           commonActionProvider.overrideWith(TestCommonAction.new),
@@ -517,6 +532,9 @@ void main() {
       action = TestSetupAction();
       container = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(TestProfiles.new),
           setupActionProvider.overrideWith(() => action),
           commonActionProvider.overrideWith(TestCommonAction.new),
@@ -719,6 +737,9 @@ void main() {
       final scopedAction = TestSetupAction();
       final scoped = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(TestProfiles.new),
           setupActionProvider.overrideWith(() => scopedAction),
           safeModeProvider.overrideWithValue(true),
@@ -903,6 +924,9 @@ void main() {
     ProviderContainer buildScoped(List<Profile> profiles, int? profileId) {
       final scoped = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(() => TestProfiles(profiles)),
           currentProfileIdProvider.overrideWithBuild((_, _) => profileId),
           setupActionProvider.overrideWith(TestSetupAction.new),
@@ -959,6 +983,9 @@ void main() {
       ).copyWith(id: 1, currentGroupName: 'Manual');
       final scoped = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(() => TestProfiles([profile])),
           currentProfileIdProvider.overrideWithBuild((_, _) => profile.id),
           setupActionProvider.overrideWith(TestSetupAction.new),
@@ -977,6 +1004,9 @@ void main() {
       ).copyWith(id: 1, currentGroupName: 'Manual');
       final scoped = ProviderContainer(
         overrides: [
+          coreHandlerProvider.overrideWithValue(
+            CoreController.scoped(_MockCoreHandlerInterface()),
+          ),
           profilesProvider.overrideWith(() => TestProfiles([profile])),
           currentProfileIdProvider.overrideWithBuild((_, _) => profile.id),
           setupActionProvider.overrideWith(TestSetupAction.new),
@@ -1049,6 +1079,9 @@ void main() {
         final setupAction = TestSetupAction();
         final scoped = ProviderContainer(
           overrides: [
+            coreHandlerProvider.overrideWithValue(
+              CoreController.scoped(_MockCoreHandlerInterface()),
+            ),
             profilesProvider.overrideWith(() => TestProfiles([profile])),
             currentProfileIdProvider.overrideWithBuild((_, _) => profile.id),
             setupActionProvider.overrideWith(() => setupAction),
