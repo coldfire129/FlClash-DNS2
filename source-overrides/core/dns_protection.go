@@ -78,6 +78,9 @@ func validateProtectedServers(servers []dns.NameServer, target string, bootstrap
 		if server.ProxyName != target || (server.Net != "https" && server.Net != "tls") || server.Params["skip-cert-verify"] != "" || server.Params["ecs"] != "0.0.0.0/0" || server.Params["ecs-override"] != "true" {
 			return errors.New("DP_UNSAFE_UPSTREAM: unprotected resolver")
 		}
+		if name, present := server.Params["name-cert-verify"]; present && (!bootstrap || !validBootstrapCertificateName(name)) {
+			return errors.New("DP_UNSAFE_UPSTREAM: invalid bootstrap certificate name")
+		}
 		if server.Net == "https" {
 			u, err := url.Parse(server.Addr)
 			if err != nil || u.Scheme != "https" || u.User != nil {
@@ -94,6 +97,26 @@ func validateProtectedServers(servers []dns.NameServer, target string, bootstrap
 		}
 	}
 	return nil
+}
+
+func validBootstrapCertificateName(name string) bool {
+	if len(name) > 253 || !strings.Contains(name, ".") {
+		return false
+	}
+	if _, err := netip.ParseAddr(name); err == nil {
+		return false
+	}
+	for _, label := range strings.Split(name, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if character != '-' && !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func validateProtectedUpdate(params *UpdateParams) error {

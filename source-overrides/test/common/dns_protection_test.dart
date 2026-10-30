@@ -114,6 +114,60 @@ void main() {
     }
   });
 
+  test('bootstrap pins an IP while authenticating the configured DNS name', () {
+    const address =
+        'https://223.5.5.5/dns-query#name-cert-verify=dns.alidns.com';
+    final settings = _protected.copyWith(bootstrapServers: [address]);
+    validateDnsProtection(settings);
+    final profile = <String, dynamic>{};
+    applyDnsProtection(profile, settings);
+    final dns = profile['dns'] as Map;
+    expect(dns['default-nameserver'], [
+      'https://223.5.5.5/dns-query#DIRECT'
+          '&name-cert-verify=dns.alidns.com&ecs=0.0.0.0/0&ecs-override=true',
+    ]);
+    expect(dns['proxy-server-nameserver'], dns['default-nameserver']);
+    expect(dns['nameserver'], [
+      'https://1.1.1.1/dns-query#HK-01&ecs=0.0.0.0/0&ecs-override=true',
+    ]);
+    expect(
+      DnsProtectionProps.fromJson(json.decode(json.encode(settings))),
+      settings,
+    );
+  });
+
+  test('certificate identity cannot inject routing or bypass parameters', () {
+    for (final fragment in [
+      'DIRECT',
+      'skip-cert-verify=true',
+      'name-cert-verify=',
+      'name-cert-verify=*.alidns.com',
+      'name-cert-verify=dns.alidns.com&skip-cert-verify=true',
+      'name-cert-verify=dns.alidns.com#DIRECT',
+      'name-cert-verify=223.5.5.5',
+      'name-cert-verify=bad_name.example',
+    ]) {
+      expect(
+        () => validateDnsProtection(
+          _protected.copyWith(
+            bootstrapServers: ['https://223.5.5.5/dns-query#$fragment'],
+          ),
+        ),
+        throwsFormatException,
+      );
+    }
+    expect(
+      () => validateDnsProtection(
+        _protected.copyWith(
+          upstreams: [
+            'https://223.5.5.5/dns-query#name-cert-verify=dns.alidns.com',
+          ],
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test(
     'profile pipeline applies policy last and leaves the source untouched',
     () async {

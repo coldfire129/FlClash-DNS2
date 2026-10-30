@@ -22,7 +22,7 @@ $coreHash = (Get-FileHash $corePath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($coreHash -ne $coreManifest.coreSha256) { throw 'Native Core does not match manifest.' }
 $result = [ordered]@{
     schema_version = 1
-    build_id = '0.9.2-dns2'
+    build_id = '0.9.2-dns2.1'
     environment = 'GitHub hosted Windows VM'
     runtime_script_revision = $env:DNS2_RUNTIME_SCRIPT_SHA
     native_build_run_id = $env:DNS2_NATIVE_BUILD_RUN

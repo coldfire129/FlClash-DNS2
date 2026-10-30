@@ -50,13 +50,13 @@ jobs:
           Copy-Item build/source-review.json (Join-Path $staging 'source-review.json')
           [ordered]@{native_build_commit=$env:DNS2_BUILD_SHA; native_build_run=$env:DNS2_BUILD_RUN; source_files=$manifest.source_files.Count; contains_git_credentials=$false} | ConvertTo-Json | Set-Content (Join-Path $staging 'provenance.json')
           $null = New-Item -ItemType Directory -Force -Path source-delivery
-          $zip = Join-Path $env:GITHUB_WORKSPACE 'source-delivery/FlClash-0.9.2-dns2-complete-source.zip'
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'source-delivery/FlClash-0.9.2-dns2.1-complete-source.zip'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [IO.Compression.ZipFile]::CreateFromDirectory($staging, $zip)
           Get-FileHash $zip -Algorithm SHA256 | Select-Object Hash | ConvertTo-Json | Set-Content source-delivery/source-archive-sha256.json
       - uses: actions/upload-artifact@v4
         with:
-          name: FlClash-0.9.2-dns2-complete-source
+          name: FlClash-0.9.2-dns2.1-complete-source
           path: source-delivery/
           retention-days: 90
           if-no-files-found: error

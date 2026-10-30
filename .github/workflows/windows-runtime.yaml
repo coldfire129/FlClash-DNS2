@@ -36,7 +36,7 @@ jobs:
           Add-Content $env:GITHUB_ENV ('DNS2_RUNTIME_SCRIPT_SHA=' + $revision)
       - uses: actions/download-artifact@v4
         with:
-          name: FlClash-0.9.2-dns2-windows-amd64-native
+          name: FlClash-0.9.2-dns2.1-windows-amd64-native
           path: native-artifact
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id || inputs.build_run_id }}
@@ -45,12 +45,13 @@ jobs:
         shell: pwsh
         env:
           DNS2_NATIVE_BUILD_RUN: ${{ github.event.workflow_run.id || inputs.build_run_id }}
-        run: ./build/test-windows-runtime.ps1 -ArtifactDirectory native-artifact -OutputDirectory runtime-records
+        run: |
+          & './build/test-windows-runtime.ps1' -ArtifactDirectory native-artifact -OutputDirectory runtime-records
       - name: Upload runtime records
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: FlClash-0.9.2-dns2-windows-runtime-records
+          name: FlClash-0.9.2-dns2.1-windows-runtime-records
           path: runtime-records/
           retention-days: 30
           if-no-files-found: warn

@@ -192,7 +192,7 @@ mod native {
             clock.wSecond,
             clock.wMilliseconds
         );
-        let data = serde_json::json!({"schema_version":1,"ts":ts,"module":"guard","level":if os_error.is_some(){"error"}else{"info"},"event":event,"result":result,"session_id":session,"os_error":os_error,"build_id":"0.9.2-dns2"});
+        let data = serde_json::json!({"schema_version":1,"ts":ts,"module":"guard","level":if os_error.is_some(){"error"}else{"info"},"event":event,"result":result,"session_id":session,"os_error":os_error,"build_id":"0.9.2-dns2.1"});
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         writeln!(file, "{}", data)?;
         file.flush()

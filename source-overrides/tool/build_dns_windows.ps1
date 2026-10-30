@@ -45,7 +45,7 @@ try {
     if ($flutter.frameworkVersion -ne '3.47.6') { throw 'Flutter 3.47.6 is required.' }
     if ($go -notmatch 'go1\.27\.1 windows/amd64') { throw 'Go 1.27.1 for windows/amd64 is required.' }
     if ($rust -notmatch '^rustc 1\.99\.1 ') { throw 'Rust 1.99.1 is required.' }
-    if ((Get-Content pubspec.yaml -Raw) -notmatch 'version: 0\.9\.2-dns2\+2026103002') {
+    if ((Get-Content pubspec.yaml -Raw) -notmatch 'version: 0\.9\.2-dns2\.1\+2026103101') {
         throw 'This script must run from the dns2 source tree.'
     }
     $ca = 'core/Clash.Meta/component/ca/ca-certificates.crt'
@@ -84,7 +84,7 @@ try {
 } finally {
     $summary = [ordered]@{
         schema_version = 1
-        build_id = '0.9.2-dns2'
+        build_id = '0.9.2-dns2.1'
         finished_utc = [DateTime]::UtcNow.ToString('o')
         host_platform = 'windows'
         build_mode = 'native'

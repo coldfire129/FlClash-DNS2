@@ -27,7 +27,7 @@ $sha = (Get-FileHash $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant(
 ($sha + '  ' + $package.Name) | Set-Content (Join-Path $delivery 'SHA256SUMS.txt')
 [ordered]@{
     schema_version = 1
-    build_id = '0.9.2-dns2'
+    build_id = '0.9.2-dns2.1'
     package = $package.Name
     package_sha256 = $sha
     core_sha256 = $coreHash

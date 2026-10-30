@@ -12,9 +12,11 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/metacubex/mihomo/component/ca"
@@ -25,13 +27,17 @@ import (
 )
 
 type bootstrapProbe struct {
-	Target     string `json:"target"`
-	Purpose    string `json:"purpose"`
-	Result     string `json:"result"`
-	ErrorCode  string `json:"errorCode,omitempty"`
-	HTTPStatus int    `json:"httpStatus,omitempty"`
-	Rcode      *int   `json:"rcode,omitempty"`
-	DurationMs int64  `json:"durationMs"`
+	Target          string  `json:"target"`
+	Purpose         string  `json:"purpose"`
+	Result          string  `json:"result"`
+	ErrorCode       string  `json:"errorCode,omitempty"`
+	Stage           string  `json:"stage"`
+	ErrorCategory   string  `json:"errorCategory,omitempty"`
+	OSError         *uint64 `json:"osError,omitempty"`
+	CertificateName string  `json:"certificateName,omitempty"`
+	HTTPStatus      int     `json:"httpStatus,omitempty"`
+	Rcode           *int    `json:"rcode,omitempty"`
+	DurationMs      int64   `json:"durationMs"`
 }
 
 var lastDnsPreflight atomic.Value
@@ -97,6 +103,8 @@ func handleDnsProtectionPreflight(params *SetupParams) error {
 				"module": "dns", "event": "bootstrap_preflight", "result": results[i].Result,
 				"dns_target": results[i].Target, "purpose": group.purpose,
 				"error_code": results[i].ErrorCode, "http_status": results[i].HTTPStatus,
+				"failure_stage": results[i].Stage, "error_category": results[i].ErrorCategory,
+				"os_error": results[i].OSError, "certificate_name": results[i].CertificateName,
 				"rcode": results[i].Rcode, "duration_ms": results[i].DurationMs,
 				"requested_policy_revision": params.DnsPolicyRevision,
 			})
@@ -131,7 +139,20 @@ func probeBootstrapGroup(ctx context.Context, servers []dns.NameServer, roots *x
 func probeBootstrapServer(ctx context.Context, server dns.NameServer, roots *x509.CertPool) (result bootstrapProbe) {
 	started := time.Now()
 	result.Target, result.Result = server.Addr, "failed"
-	defer func() { result.DurationMs = time.Since(started).Milliseconds() }()
+	result.CertificateName = server.Params["name-cert-verify"]
+	var stageMu sync.Mutex
+	stage := "validate"
+	setStage := func(value string) {
+		stageMu.Lock()
+		stage = value
+		stageMu.Unlock()
+	}
+	defer func() {
+		result.DurationMs = time.Since(started).Milliseconds()
+		stageMu.Lock()
+		result.Stage = stage
+		stageMu.Unlock()
+	}()
 	if err := validateProtectedServers([]dns.NameServer{server}, "DIRECT", true); err != nil {
 		result.ErrorCode = "DP_UNSAFE_UPSTREAM"
 		return
@@ -153,12 +174,21 @@ func probeBootstrapServer(ctx context.Context, server dns.NameServer, roots *x50
 		result.ErrorCode = "DP_PROBE_UNKNOWN"
 		return
 	}
+	tlsConfig := &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12, Time: ntp.Now}
+	if result.CertificateName != "" {
+		// Match Mihomo's literal-IP DoH authentication, including chain and DNS name.
+		verify := ca.NewNameCertVerifier(result.CertificateName, roots, ntp.Now)
+		tlsConfig.InsecureSkipVerify = true
+		tlsConfig.VerifyConnection = func(state tls.ConnectionState) error {
+			return verify(state.PeerCertificates)
+		}
+	}
 	transport := &http.Transport{
 		Proxy: nil,
 		DialContext: func(ctx context.Context, _, address string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "tcp4", address)
 		},
-		TLSClientConfig:   &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12, Time: ntp.Now},
+		TLSClientConfig:   tlsConfig,
 		ForceAttemptHTTP2: true,
 	}
 	defer transport.CloseIdleConnections()
@@ -166,6 +196,21 @@ func probeBootstrapServer(ctx context.Context, server dns.NameServer, roots *x50
 		Transport: transport, Timeout: 5 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
+	trace := &httptrace.ClientTrace{
+		ConnectStart:      func(_, _ string) { setStage("connect") },
+		TLSHandshakeStart: func() { setStage("tls_handshake") },
+		TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
+			if err == nil {
+				setStage("request_headers")
+			}
+		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			if info.Err == nil {
+				setStage("response_headers")
+			}
+		},
+	}
+	ctx = httptrace.WithClientTrace(ctx, trace)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.Addr, bytes.NewReader(wire))
 	if err != nil {
 		result.ErrorCode = "DP_UNSAFE_UPSTREAM"
@@ -173,23 +218,28 @@ func probeBootstrapServer(ctx context.Context, server dns.NameServer, roots *x50
 	}
 	request.Header.Set("Content-Type", "application/dns-message")
 	request.Header.Set("Accept", "application/dns-message")
+	setStage("connect")
 	response, err := client.Do(request)
 	if err != nil {
-		result.ErrorCode = protectedQueryError(err)
+		result.setFailure(err)
 		return
 	}
 	defer response.Body.Close()
+	setStage("http_response")
 	result.HTTPStatus = response.StatusCode
 	contentType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if response.StatusCode != http.StatusOK || contentType != "application/dns-message" {
 		result.ErrorCode = "DP_DOH_BAD_RESPONSE"
+		result.ErrorCategory = "http_response"
 		return
 	}
+	setStage("response_body")
 	body, err := io.ReadAll(io.LimitReader(response.Body, 65536))
 	if err != nil {
-		result.ErrorCode = protectedQueryError(err)
+		result.setFailure(err)
 		return
 	}
+	setStage("dns_response")
 	answer := new(D.Msg)
 	if len(body) > 65535 || answer.Unpack(body) != nil || !answer.Response || answer.Opcode != D.OpcodeQuery || answer.Id != query.Id || len(answer.Question) != 1 || answer.Question[0] != query.Question[0] {
 		result.ErrorCode = "DP_DOH_BAD_RESPONSE"
@@ -201,7 +251,18 @@ func probeBootstrapServer(ctx context.Context, server dns.NameServer, roots *x50
 		return
 	}
 	result.Result = "success"
+	setStage("complete")
 	return
+}
+
+func (result *bootstrapProbe) setFailure(err error) {
+	result.ErrorCode = protectedQueryError(err)
+	result.ErrorCategory = providerRequestFailureReason(err)
+	var code syscall.Errno
+	if errors.As(err, &code) {
+		value := uint64(code)
+		result.OSError = &value
+	}
 }
 
 func protectedErrorCode(err error) string {

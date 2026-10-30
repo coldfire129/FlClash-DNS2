@@ -62,7 +62,7 @@ func queueDiagnostic(fields map[string]any) {
 	if fields["result"] == "failed" || fields["result"] == "blocked" {
 		fields["level"] = "error"
 	}
-	fields["build_id"] = "0.9.2-dns2"
+	fields["build_id"] = "0.9.2-dns2.1"
 	fields["pid"] = os.Getpid()
 	fields["schema_version"] = 1
 	fields["ts"] = time.Now().UTC().Format(time.RFC3339Nano)

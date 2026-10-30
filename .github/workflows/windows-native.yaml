@@ -37,6 +37,8 @@ jobs:
         run: |
           & './build/invoke-ci-command.ps1' -Name go-test -Command go -WorkingDirectory source/FlClash-DNS/core -Arguments @('test', '-timeout', '120s', '.')
           & './build/invoke-ci-command.ps1' -Name go-diagnostic-lifetime -Command go -WorkingDirectory source/FlClash-DNS/core -Arguments @('test', '-timeout', '120s', '-count', '20', '-run', '^TestRejectedProtectedConfigDoesNotApplyDefault$', '.')
+          $env:DNS2_TEST_LIVE_BOOTSTRAP = '1'
+          & './build/invoke-ci-command.ps1' -Name go-public-bootstrap -Command go -WorkingDirectory source/FlClash-DNS/core -Arguments @('test', '-v', '-timeout', '45s', '-count', '1', '-run', '^TestPublicBootstrapProviderInterop$', '.')
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -166,7 +168,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: FlClash-0.9.2-dns2-windows-amd64-native
+          name: FlClash-0.9.2-dns2.1-windows-amd64-native
           path: delivery/
           retention-days: 30
           if-no-files-found: warn

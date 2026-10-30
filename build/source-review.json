@@ -2,7 +2,7 @@
   "schema_version": 1,
   "review_scope": "source inputs only; historical delivery and validation logs excluded",
   "public_unchanged_files": 2410,
-  "text_overrides": 83,
+  "text_overrides": 85,
   "binary_overrides": 0,
   "credential_scan": "no non-test credential matches detected",
   "public_fixtures": [
