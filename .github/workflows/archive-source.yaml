@@ -1,0 +1,62 @@
+name: Archive complete DNS2 source
+
+on:
+  workflow_run:
+    workflows: ['Build FlClash DNS2 Windows client']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Match the source manifest to the completed build
+        shell: pwsh
+        env:
+          DNS2_BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          $expected = (& git rev-parse ($env:DNS2_BUILD_SHA + ':build/source-manifest.json')).Trim()
+          $actual = (& git rev-parse HEAD:build/source-manifest.json).Trim()
+          if ($LASTEXITCODE -ne 0 -or $expected -ne $actual) { throw 'Source manifest changed after the native build.' }
+      - uses: ./build/restore-source
+      - name: Archive every verified source file
+        shell: pwsh
+        env:
+          DNS2_BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DNS2_BUILD_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content build/source-manifest.json -Raw | ConvertFrom-Json
+          $staging = Join-Path $env:RUNNER_TEMP 'dns2-complete-source'
+          $root = Join-Path $staging 'FlClash-DNS'
+          $null = New-Item -ItemType Directory -Force -Path $root
+          foreach ($file in $manifest.source_files) {
+            $inputFile = Join-Path 'source/FlClash-DNS' $file.path
+            $outputFile = Join-Path $root $file.path
+            $null = New-Item -ItemType Directory -Force -Path (Split-Path $outputFile)
+            Copy-Item -LiteralPath $inputFile -Destination $outputFile
+            if ((Get-FileHash $outputFile -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) { throw ('Source copy mismatch: ' + $file.path) }
+          }
+          Copy-Item build/source-manifest.json (Join-Path $staging 'source-manifest.json')
+          Copy-Item build/source-review.json (Join-Path $staging 'source-review.json')
+          [ordered]@{native_build_commit=$env:DNS2_BUILD_SHA; native_build_run=$env:DNS2_BUILD_RUN; source_files=$manifest.source_files.Count; contains_git_credentials=$false} | ConvertTo-Json | Set-Content (Join-Path $staging 'provenance.json')
+          $null = New-Item -ItemType Directory -Force -Path source-delivery
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'source-delivery/FlClash-0.9.2-dns2-complete-source.zip'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory($staging, $zip)
+          Get-FileHash $zip -Algorithm SHA256 | Select-Object Hash | ConvertTo-Json | Set-Content source-delivery/source-archive-sha256.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlClash-0.9.2-dns2-complete-source
+          path: source-delivery/
+          retention-days: 90
+          if-no-files-found: error
