@@ -36,7 +36,10 @@ try {
     foreach ($command in @('flutter', 'dart', 'go', 'cargo', 'rustc', 'git')) {
         $null = Get-Command $command -ErrorAction Stop
     }
-    $flutter = (& flutter --version --machine | Out-String) | ConvertFrom-Json
+    Invoke-BuildStep 'flutter-bootstrap' 'flutter' @('--version')
+    $flutterVersion = (& flutter --version --machine | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to read the Flutter machine version.' }
+    $flutter = $flutterVersion | ConvertFrom-Json
     $go = (& go version | Out-String).Trim()
     $rust = (& rustc --version | Out-String).Trim()
     if ($flutter.frameworkVersion -ne '3.47.6') { throw 'Flutter 3.47.6 is required.' }
