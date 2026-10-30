@@ -1,0 +1,1 @@
+# FlClash-DNS2
