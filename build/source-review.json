@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "review_scope": "source inputs only; historical delivery and validation logs excluded",
+  "public_unchanged_files": 2412,
+  "text_overrides": 80,
+  "binary_overrides": 0,
+  "credential_scan": "no non-test credential matches detected",
+  "public_fixtures": [
+    {
+      "path": "core/Clash.Meta/docs/config.yaml",
+      "git_blob_sha": "9ee60878891349b9dba38aff5d68798db5272bf4"
+    },
+    {
+      "path": "core/Clash.Meta/test/config/example.org-key.pem",
+      "git_blob_sha": "dbe9a3db3e057589524a3674659398260577a5d0"
+    },
+    {
+      "path": "core/Clash.Meta/transport/openvpn/config_test.go",
+      "git_blob_sha": "70314285e6a6596fc53da50e9c4101b794393e99"
+    }
+  ]
+}
