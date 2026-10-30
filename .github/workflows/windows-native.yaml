@@ -33,8 +33,10 @@ jobs:
         shell: pwsh
         env:
           CGO_ENABLED: '0'
+          DNS2_TEST_DIAGNOSTIC_HOME: ${{ github.workspace }}/check-logs/core-diagnostics
         run: |
           & './build/invoke-ci-command.ps1' -Name go-test -Command go -WorkingDirectory source/FlClash-DNS/core -Arguments @('test', '-timeout', '120s', '.')
+          & './build/invoke-ci-command.ps1' -Name go-diagnostic-lifetime -Command go -WorkingDirectory source/FlClash-DNS/core -Arguments @('test', '-timeout', '120s', '-count', '20', '-run', '^TestRejectedProtectedConfigDoesNotApplyDefault$', '.')
       - if: always()
         uses: actions/upload-artifact@v4
         with:
