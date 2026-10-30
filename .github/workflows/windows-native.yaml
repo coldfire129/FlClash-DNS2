@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: dns2-native-windows
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   CI: 'true'

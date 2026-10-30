@@ -974,7 +974,7 @@ mod tests {
 
     #[test]
     fn protocol_uses_lowercase_session_ownership() {
-        assert_eq!(PROTOCOL_VERSION, if cfg!(windows) { "8" } else { "6" });
+        assert_eq!(PROTOCOL_VERSION, if cfg!(windows) { "9" } else { "6" });
         assert!(is_valid_session_id("0123456789abcdef0123456789abcdef"));
         assert!(!is_valid_session_id("ABCDEF0123456789abcdef0123456789"));
         assert!(!is_valid_session_id("0123456789abcdef"));
